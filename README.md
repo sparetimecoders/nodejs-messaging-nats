@@ -14,6 +14,8 @@
 
 NATS transport implementation for the [gomessaging](https://github.com/sparetimecoders/messaging) specification. Uses **JetStream** for durable event and custom streams, and **Core NATS** for request-reply patterns. All messages carry CloudEvents 1.0 metadata, and naming conventions are deterministic per the shared spec.
 
+> **Deep dives**: See the [docs/](docs/) directory for detailed guides on [connection & configuration](docs/connection.md), [consumers](docs/consumers.md), [publishers](docs/publishers.md), [request-response](docs/request-response.md), [streams & retention](docs/streams.md), and [observability](docs/observability.md).
+
 ## Installation
 
 ```bash
