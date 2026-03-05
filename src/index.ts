@@ -2,14 +2,14 @@
 // Copyright (c) 2026 sparetimecoders
 
 /**
- * @gomessaging/nats - NATS transport for gomessaging
+ * @sparetimecoders/messaging-nats - NATS transport for gomessaging
  *
  * This module provides a NATS transport implementation (JetStream + Core)
  * that follows the gomessaging specification for naming conventions,
  * topology, and CloudEvents binary content mode.
  *
  * Usage:
- *   import { Connection } from "@gomessaging/nats";
+ *   import { Connection } from "@sparetimecoders/messaging-nats";
  *
  *   const conn = new Connection({ url: "nats://localhost:4222", serviceName: "my-service" });
  *   const publisher = conn.addEventPublisher();

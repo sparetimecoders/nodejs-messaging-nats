@@ -6,7 +6,7 @@
 
 import * as fs from "node:fs";
 import * as readline from "node:readline";
-import { Connection, Publisher } from "@gomessaging/nats";
+import { Connection, Publisher } from "@sparetimecoders/messaging-nats";
 import type {
   ConsumableEvent,
   DeliveryInfo,

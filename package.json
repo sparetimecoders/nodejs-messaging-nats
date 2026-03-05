@@ -1,5 +1,5 @@
 {
-  "name": "@gomessaging/nats",
+  "name": "@sparetimecoders/messaging-nats",
   "version": "0.1.0",
   "type": "module",
   "exports": {
