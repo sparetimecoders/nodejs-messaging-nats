@@ -1,4 +1,4 @@
-# @gomessaging/nats
+# @sparetimecoders/messaging-nats
 
 <p align="center">
   <strong>NATS/JetStream transport for gomessaging (Node.js/TypeScript).</strong>
@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/sparetimecoders/nodejs-messaging-nats/actions"><img alt="CI" src="https://github.com/sparetimecoders/nodejs-messaging-nats/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://www.npmjs.com/package/@gomessaging/nats"><img alt="npm" src="https://img.shields.io/npm/v/@gomessaging/nats"></a>
+  <a href="https://www.npmjs.com/package/@sparetimecoders/messaging-nats"><img alt="npm" src="https://img.shields.io/npm/v/@sparetimecoders/messaging-nats"></a>
   <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-blue.svg"></a>
 </p>
 
@@ -17,13 +17,13 @@ NATS transport implementation for the [gomessaging](https://github.com/sparetime
 ## Installation
 
 ```bash
-npm install @gomessaging/nats
+npm install @sparetimecoders/messaging-nats
 ```
 
 ## Quick Start
 
 ```typescript
-import { Connection } from "@gomessaging/nats";
+import { Connection } from "@sparetimecoders/messaging-nats";
 
 const conn = new Connection({
   url: "nats://localhost:4222",
@@ -48,7 +48,7 @@ await pub.publish("Order.Created", { orderId: "abc-123", amount: 42 });
 Publish domain events to the default `events` JetStream stream. Any number of services can subscribe by routing key. Consumers are durable by default (survive restarts); pass `ephemeral: true` for transient subscriptions.
 
 ```typescript
-import { Connection } from "@gomessaging/nats";
+import { Connection } from "@sparetimecoders/messaging-nats";
 
 const conn = new Connection({
   url: "nats://localhost:4222",
@@ -181,7 +181,7 @@ interface StreamConfig {
 Use `streamDefaults` to apply limits to all streams, and `streamConfigs` for per-stream overrides. Per-stream configs replace defaults entirely (no field-level merging).
 
 ```typescript
-import { Connection, DefaultStreamConfig } from "@gomessaging/nats";
+import { Connection, DefaultStreamConfig } from "@sparetimecoders/messaging-nats";
 
 const conn = new Connection({
   url: "nats://localhost:4222",
@@ -232,7 +232,7 @@ OpenTelemetry trace context propagation is built in. Pass a `TextMapPropagator` 
 Trace context is injected into NATS headers on publish and extracted on consume. The helper functions are also exported for direct use:
 
 ```typescript
-import { injectToHeaders, extractToContext } from "@gomessaging/nats";
+import { injectToHeaders, extractToContext } from "@sparetimecoders/messaging-nats";
 
 // Inject OTel context into NATS headers
 injectToHeaders(otelContext, natsHeaders, propagator);
