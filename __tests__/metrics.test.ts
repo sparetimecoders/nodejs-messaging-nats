@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { startJSConsumers, startCoreConsumers } from "../src/consumer.js";
 import { Publisher } from "../src/publisher.js";
-import type { MetricsRecorder } from "@gomessaging/spec";
+import type { MetricsRecorder } from "@sparetimecoders/messaging";
 import type { JSConsumerRegistration, CoreConsumerRegistration } from "../src/consumer.js";
 
 function createMockMetrics(): MetricsRecorder & { [K in keyof MetricsRecorder]: ReturnType<typeof vi.fn> } {

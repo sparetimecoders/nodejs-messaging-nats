@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import type { Context } from "@opentelemetry/api";
 import type { JetStreamClient, NatsConnection, MsgHdrs } from "nats";
 import { headers as natsHeaders } from "nats";
-import type { MetricsRecorder, RoutingKeyMapper } from "@gomessaging/spec";
+import type { MetricsRecorder, RoutingKeyMapper } from "@sparetimecoders/messaging";
 import {
   CESpecVersion,
   CESpecVersionValue,
@@ -16,7 +16,7 @@ import {
   CEID,
   natsSubject,
   mapRoutingKey,
-} from "@gomessaging/spec";
+} from "@sparetimecoders/messaging";
 import { injectToHeaders } from "./tracing.js";
 import type { TextMapPropagator } from "@opentelemetry/api";
 

@@ -245,7 +245,7 @@ const ctx = extractToContext(natsHeaders, propagator);
 
 ### Metrics
 
-Implement the `MetricsRecorder` interface from `@gomessaging/spec` and pass it via the `metrics` option. The transport records:
+Implement the `MetricsRecorder` interface from `@sparetimecoders/messaging` and pass it via the `metrics` option. The transport records:
 
 - `eventReceived` / `eventAck` / `eventNack` per consumer
 - `publishSucceed` / `publishFailed` per publisher

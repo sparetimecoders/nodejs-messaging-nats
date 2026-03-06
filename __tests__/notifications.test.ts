@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { startJSConsumers, startCoreConsumers } from "../src/consumer.js";
 import type { JSConsumerRegistration, CoreConsumerRegistration } from "../src/consumer.js";
-import type { Notification, ErrorNotification } from "@gomessaging/spec";
+import type { Notification, ErrorNotification } from "@sparetimecoders/messaging";
 
 const silentLogger = {
   info: vi.fn(),

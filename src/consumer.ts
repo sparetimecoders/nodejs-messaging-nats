@@ -12,7 +12,7 @@ import type {
   ErrorNotificationHandler,
   MetricsRecorder,
   RoutingKeyMapper,
-} from "@gomessaging/spec";
+} from "@sparetimecoders/messaging";
 import {
   metadataFromHeaders,
   validateCEHeaders,
@@ -21,7 +21,7 @@ import {
   translateWildcard,
   matchRoutingKey,
   mapRoutingKey,
-} from "@gomessaging/spec";
+} from "@sparetimecoders/messaging";
 import { extractToContext } from "./tracing.js";
 import type { TextMapPropagator } from "@opentelemetry/api";
 import type { StreamConfigResolver, ConsumerDefaults } from "./connection.js";

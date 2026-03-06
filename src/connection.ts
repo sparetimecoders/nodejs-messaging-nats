@@ -11,11 +11,11 @@ import type {
   ErrorNotificationHandler,
   MetricsRecorder,
   RoutingKeyMapper,
-} from "@gomessaging/spec";
+} from "@sparetimecoders/messaging";
 import {
   DefaultEventExchangeName,
   natsStreamName,
-} from "@gomessaging/spec";
+} from "@sparetimecoders/messaging";
 import {
   connect,
   Events,

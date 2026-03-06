@@ -109,7 +109,7 @@ const topology = conn.topology();
 Use with the spec module:
 
 ```typescript
-import { validate, mermaid } from "@gomessaging/spec";
+import { validate, mermaid } from "@sparetimecoders/messaging";
 
 const errors = validate(topology);
 const diagram = mermaid([topology]);

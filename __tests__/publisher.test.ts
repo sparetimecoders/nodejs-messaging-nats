@@ -8,7 +8,7 @@ import {
   CEDataContentType,
   CETime,
   CEID,
-} from "@gomessaging/spec";
+} from "@sparetimecoders/messaging";
 
 describe("Publisher", () => {
   describe("JetStream publish", () => {
