@@ -17,12 +17,9 @@ jobs:
         image: nats@sha256:c9abdce88a85ed5fcc8e9fc6b284d2601f5d1c1d0d58ddd67cfdc411768bfd7f # latest
         ports:
           - "4222:4222"
-        options: >-
-          --health-cmd "true"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
+      - name: Wait for NATS
+        run: timeout 30 bash -c 'until nc -z localhost 4222; do sleep 0.5; done'
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
