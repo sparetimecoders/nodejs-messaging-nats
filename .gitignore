@@ -11,6 +11,9 @@
 # Claude Code
 .claude/
 
+# Bun
+bunfig.toml
+
 # Node
 node_modules/
 dist/

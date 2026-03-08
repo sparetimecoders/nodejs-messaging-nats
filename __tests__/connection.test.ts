@@ -1,32 +1,33 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
-import { Connection } from "../src/connection.js";
+import { describe, expect, it, mock, beforeEach } from "bun:test";
+import { Events } from "nats";
 
-// Mock the nats module
-vi.mock("nats", async () => {
-  const actual = await vi.importActual<typeof import("nats")>("nats");
+// Module mock must be set up before importing the module that uses it
+const mockConnectFn = mock(() => Promise.resolve({}));
+
+mock.module("nats", () => {
+  const actual = require("nats");
   return {
     ...actual,
-    connect: vi.fn(),
+    connect: mockConnectFn,
   };
 });
 
-import { connect, Events } from "nats";
-const mockConnect = vi.mocked(connect);
+import { Connection } from "../src/connection.js";
 
 function createMockNatsConnection(overrides?: Record<string, unknown>) {
   return {
-    jetstream: vi.fn(() => ({})),
-    jetstreamManager: vi.fn(async () => ({
+    jetstream: mock(() => ({})),
+    jetstreamManager: mock(async () => ({
       streams: {
-        add: vi.fn(),
-        update: vi.fn(),
+        add: mock(() => {}),
+        update: mock(() => {}),
       },
     })),
-    drain: vi.fn(async () => {}),
-    close: vi.fn(async () => {}),
-    flush: vi.fn(async () => {}),
-    subscribe: vi.fn(() => ({ unsubscribe: vi.fn() })),
-    status: vi.fn(() => ({
+    drain: mock(async () => {}),
+    close: mock(async () => {}),
+    flush: mock(async () => {}),
+    subscribe: mock(() => ({ unsubscribe: mock(() => {}) })),
+    status: mock(() => ({
       async *[Symbol.asyncIterator]() {
         // Default: no events
       },
@@ -36,13 +37,13 @@ function createMockNatsConnection(overrides?: Record<string, unknown>) {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  mockConnectFn.mockReset();
 });
 
 describe("Connection natsOptions pass-through", () => {
   it("passes natsOptions to nats.connect merged with servers", async () => {
     const mockNc = createMockNatsConnection();
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -56,7 +57,7 @@ describe("Connection natsOptions pass-through", () => {
 
     await conn.start();
 
-    expect(mockConnect).toHaveBeenCalledWith({
+    expect(mockConnectFn).toHaveBeenCalledWith({
       maxReconnectAttempts: 10,
       reconnectTimeWait: 2000,
       reconnectJitter: 500,
@@ -68,10 +69,8 @@ describe("Connection natsOptions pass-through", () => {
 
   it("uses url as servers even if natsOptions tries to override servers", async () => {
     const mockNc = createMockNatsConnection();
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
-    // TypeScript prevents setting servers via natsOptions (Omit<>),
-    // but we verify the runtime spread order is correct
     const conn = new Connection({
       url: "nats://myhost:4222",
       serviceName: "test-svc",
@@ -79,7 +78,7 @@ describe("Connection natsOptions pass-through", () => {
 
     await conn.start();
 
-    expect(mockConnect).toHaveBeenCalledWith(
+    expect(mockConnectFn).toHaveBeenCalledWith(
       expect.objectContaining({
         servers: ["nats://myhost:4222"],
       }),
@@ -90,7 +89,7 @@ describe("Connection natsOptions pass-through", () => {
 
   it("connects with default options when natsOptions is not provided", async () => {
     const mockNc = createMockNatsConnection();
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -99,7 +98,7 @@ describe("Connection natsOptions pass-through", () => {
 
     await conn.start();
 
-    expect(mockConnect).toHaveBeenCalledWith({
+    expect(mockConnectFn).toHaveBeenCalledWith({
       servers: ["nats://localhost:4222"],
     });
 
@@ -110,7 +109,7 @@ describe("Connection natsOptions pass-through", () => {
 describe("Connection close() uses drain", () => {
   it("calls drain() on close", async () => {
     const mockNc = createMockNatsConnection();
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -125,25 +124,21 @@ describe("Connection close() uses drain", () => {
 
   it("stops consumer handles before draining", async () => {
     const mockNc = createMockNatsConnection();
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const callOrder: string[] = [];
-    const stopFn = vi.fn(() => callOrder.push("stop"));
+    const stopFn = mock(() => { callOrder.push("stop"); });
     mockNc.drain.mockImplementation(async () => {
       callOrder.push("drain");
     });
 
-    // Register a core consumer so we get a consumer handle
     const conn = new Connection({
       url: "nats://localhost:4222",
       serviceName: "test-svc",
     });
 
-    // We need to add a consumer to verify ordering.
-    // Use a service request consumer which creates core subscriptions.
     conn.addServiceRequestConsumer("test.route", async () => ({ ok: true }));
 
-    // Override subscribe to capture the stop (unsubscribe) call
     mockNc.subscribe.mockReturnValue({
       unsubscribe: stopFn,
     });
@@ -157,7 +152,7 @@ describe("Connection close() uses drain", () => {
   it("handles drain() throwing when already closed", async () => {
     const mockNc = createMockNatsConnection();
     mockNc.drain.mockRejectedValue(new Error("connection already closed"));
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -166,24 +161,22 @@ describe("Connection close() uses drain", () => {
 
     await conn.start();
 
-    // Should not throw
     await expect(conn.close()).resolves.toBeUndefined();
   });
 });
 
 describe("Connection reconnection callbacks", () => {
   it("invokes onReconnect when NATS emits a reconnect event", async () => {
-    const onReconnect = vi.fn();
+    const onReconnect = mock(() => {});
     const mockNc = createMockNatsConnection({
       status: () => ({
         async *[Symbol.asyncIterator]() {
-          // Yield a reconnect event
           yield { type: Events.Reconnect, data: "reconnected" };
         },
       }),
     });
 
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -193,7 +186,6 @@ describe("Connection reconnection callbacks", () => {
 
     await conn.start();
 
-    // Allow the async iterator to process
     await new Promise((resolve) => setTimeout(resolve, 10));
 
     expect(onReconnect).toHaveBeenCalledTimes(1);
@@ -202,7 +194,7 @@ describe("Connection reconnection callbacks", () => {
   });
 
   it("invokes onDisconnect with an Error when NATS emits a disconnect event", async () => {
-    const onDisconnect = vi.fn();
+    const onDisconnect = mock(() => {});
 
     const mockNc = createMockNatsConnection({
       status: () => ({
@@ -212,7 +204,7 @@ describe("Connection reconnection callbacks", () => {
       }),
     });
 
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -227,14 +219,14 @@ describe("Connection reconnection callbacks", () => {
     expect(onDisconnect).toHaveBeenCalledTimes(1);
     const err = onDisconnect.mock.calls[0][0];
     expect(err).toBeInstanceOf(Error);
-    expect(err.message).toBe("server went away");
+    expect((err as Error).message).toBe("server went away");
 
     await conn.close();
   });
 
   it("does not start status monitor when no callbacks are provided", async () => {
     const mockNc = createMockNatsConnection();
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -243,14 +235,13 @@ describe("Connection reconnection callbacks", () => {
 
     await conn.start();
 
-    // status() should not be called when no callbacks are registered
     expect(mockNc.status).not.toHaveBeenCalled();
 
     await conn.close();
   });
 
   it("stops monitoring status events on close", async () => {
-    const onReconnect = vi.fn();
+    const onReconnect = mock(() => {});
     let yieldResolve: (() => void) | undefined;
     const yieldPromise = new Promise<void>((r) => { yieldResolve = r; });
     let iteratorDone = false;
@@ -260,7 +251,6 @@ describe("Connection reconnection callbacks", () => {
         async *[Symbol.asyncIterator]() {
           yield { type: Events.Reconnect, data: "" };
           yieldResolve?.();
-          // Wait a bit then yield another - should be ignored after close
           await new Promise((r) => setTimeout(r, 50));
           if (!iteratorDone) {
             yield { type: Events.Reconnect, data: "" };
@@ -269,7 +259,7 @@ describe("Connection reconnection callbacks", () => {
       }),
     });
 
-    mockConnect.mockResolvedValue(mockNc as never);
+    mockConnectFn.mockResolvedValue(mockNc as never);
 
     const conn = new Connection({
       url: "nats://localhost:4222",
@@ -280,13 +270,11 @@ describe("Connection reconnection callbacks", () => {
     await conn.start();
     await yieldPromise;
 
-    // First event should have been processed
     expect(onReconnect).toHaveBeenCalledTimes(1);
 
     iteratorDone = true;
     await conn.close();
 
-    // After close, the second event should not trigger the callback
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(onReconnect).toHaveBeenCalledTimes(1);
   });

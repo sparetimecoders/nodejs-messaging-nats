@@ -1,9 +1,16 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, mock, beforeEach } from "bun:test";
 import { startCoreConsumers, startJSConsumers } from "../src/consumer.js";
 import type { CoreConsumerRegistration, JSConsumerRegistration } from "../src/consumer.js";
 import { AckPolicy } from "nats";
 
-// Minimal mock for NatsConnection subscribe
+async function waitFor(fn: () => void, timeout = 1000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try { fn(); return; } catch { await new Promise(r => setTimeout(r, 10)); }
+  }
+  fn();
+}
+
 function createMockNc() {
   const subscriptions: Array<{
     subject: string;
@@ -12,9 +19,9 @@ function createMockNc() {
 
   return {
     nc: {
-      subscribe: vi.fn((subject: string, opts: { callback: (err: null, msg: unknown) => void }) => {
+      subscribe: mock((subject: string, opts: { callback: (err: null, msg: unknown) => void }) => {
         subscriptions.push({ subject, callback: opts.callback });
-        return { unsubscribe: vi.fn() };
+        return { unsubscribe: mock(() => {}) };
       }),
     },
     subscriptions,
@@ -48,50 +55,46 @@ function createMockMsg(data: unknown, headers?: Record<string, string>, reply?: 
     data: new TextEncoder().encode(JSON.stringify(data)),
     headers: headerObj,
     reply: reply ?? "",
-    respond: vi.fn(),
+    respond: mock(() => {}),
   };
 }
 
 const silentLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
+  info: mock(() => {}),
+  warn: mock(() => {}),
+  error: mock(() => {}),
+  debug: mock(() => {}),
 };
 
 describe("JetStream consumers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   function createMockJsAndJsm() {
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         // no messages in test
       },
     };
 
     const mockConsumer = {
-      consume: vi.fn().mockResolvedValue(mockMessages),
+      consume: mock(() => Promise.resolve(mockMessages)),
     };
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue(mockConsumer),
+        get: mock(() => Promise.resolve(mockConsumer)),
       },
     };
 
     const jsm = {
       streams: {
-        add: vi.fn().mockResolvedValue({}),
-        update: vi.fn().mockResolvedValue({}),
+        add: mock(() => Promise.resolve({})),
+        update: mock(() => Promise.resolve({})),
       },
       consumers: {
-        add: vi.fn().mockImplementation((_stream: string, cfg: { durable_name?: string }) => {
+        add: mock((_stream: string, cfg: { durable_name?: string }) => {
           return Promise.resolve({ name: cfg.durable_name ?? `ephemeral-${Date.now()}` });
         }),
-        delete: vi.fn().mockResolvedValue(true),
+        delete: mock(() => Promise.resolve(true)),
       },
     };
 
@@ -113,13 +116,11 @@ describe("JetStream consumers", () => {
 
     await startJSConsumers(js as never, jsm as never, "node-demo", registrations, silentLogger);
 
-    // Should create stream
     expect(jsm.streams.add).toHaveBeenCalledWith({
       name: "events",
       subjects: ["events.>"],
     });
 
-    // Single registration uses filter_subject (singular)
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
       filter_subject: "events.Order.Created",
       ack_policy: AckPolicy.Explicit,
@@ -151,16 +152,14 @@ describe("JetStream consumers", () => {
 
     const handles = await startJSConsumers(js as never, jsm as never, "node-demo", registrations, silentLogger);
 
-    // Should create only ONE consumer (grouped)
-    expect(jsm.consumers.add).toHaveBeenCalledOnce();
+    expect(jsm.consumers.add).toHaveBeenCalledTimes(1);
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
       filter_subjects: ["events.Order.Created", "events.Ping"],
       ack_policy: AckPolicy.Explicit,
       durable_name: "node-demo",
     });
 
-    // Only one NATS consumer handle
-    expect(js.consumers.get).toHaveBeenCalledOnce();
+    expect(js.consumers.get).toHaveBeenCalledTimes(1);
     expect(handles).toHaveLength(1);
   });
 
@@ -173,7 +172,6 @@ describe("JetStream consumers", () => {
         stream: "events",
         routingKey: "Ping",
         handler: async () => {},
-        // no durable
       },
     ];
 
@@ -202,12 +200,12 @@ describe("JetStream consumers", () => {
 
     expect(handles).toHaveLength(1);
     handles[0].stop();
-    expect(mockMessages.stop).toHaveBeenCalledOnce();
+    expect(mockMessages.stop).toHaveBeenCalledTimes(1);
   });
 
   it("handles stream already existing", async () => {
     const { js, jsm } = createMockJsAndJsm();
-    jsm.streams.add.mockRejectedValueOnce(new Error("stream already exists"));
+    jsm.streams.add.mockImplementation(() => Promise.reject(new Error("stream already exists")));
 
     const registrations: JSConsumerRegistration<unknown>[] = [
       {
@@ -225,12 +223,12 @@ describe("JetStream consumers", () => {
       subjects: ["events.>"],
     });
 
-    expect(jsm.consumers.add).toHaveBeenCalledOnce();
+    expect(jsm.consumers.add).toHaveBeenCalledTimes(1);
   });
 
   it("deletes and recreates when consumer already exists with incompatible config", async () => {
     const { js, jsm } = createMockJsAndJsm();
-    jsm.consumers.add.mockRejectedValueOnce(new Error("consumer already exists"));
+    jsm.consumers.add.mockImplementationOnce(() => Promise.reject(new Error("consumer already exists")));
 
     const registrations: JSConsumerRegistration<unknown>[] = [
       {
@@ -244,10 +242,8 @@ describe("JetStream consumers", () => {
 
     await startJSConsumers(js as never, jsm as never, "test-svc", registrations, silentLogger);
 
-    // Should delete the old consumer
     expect(jsm.consumers.delete).toHaveBeenCalledWith("events", "test-durable");
 
-    // Then recreate it (second add call)
     expect(jsm.consumers.add).toHaveBeenCalledTimes(2);
 
     expect(js.consumers.get).toHaveBeenCalledWith("events", "test-durable");
@@ -258,9 +254,8 @@ describe("JetStream consumers", () => {
     const acked: boolean[] = [];
     const nacked: boolean[] = [];
 
-    // Create a mock message iterator that yields one message
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Created",
@@ -289,22 +284,22 @@ describe("JetStream consumers", () => {
     };
 
     const mockConsumer = {
-      consume: vi.fn().mockResolvedValue(mockMessages),
+      consume: mock(() => Promise.resolve(mockMessages)),
     };
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue(mockConsumer),
+        get: mock(() => Promise.resolve(mockConsumer)),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
       consumers: {
-        add: vi.fn().mockImplementation((_stream: string, cfg: { durable_name?: string }) => {
+        add: mock((_stream: string, cfg: { durable_name?: string }) => {
           return Promise.resolve({ name: cfg.durable_name ?? `ephemeral-${Date.now()}` });
         }),
-        delete: vi.fn().mockResolvedValue(true),
+        delete: mock(() => Promise.resolve(true)),
       },
     };
 
@@ -320,8 +315,7 @@ describe("JetStream consumers", () => {
 
     await startJSConsumers(js as never, jsm as never, "wildcard-svc", registrations, silentLogger);
 
-    // Wait for the async message processing
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(received).toHaveLength(1);
     });
 
@@ -352,7 +346,6 @@ describe("JetStream consumers", () => {
 
     const handles = await startJSConsumers(js as never, jsm as never, "node-demo", registrations, silentLogger);
 
-    // Different streams = different groups = two consumers
     expect(jsm.consumers.add).toHaveBeenCalledTimes(2);
     expect(js.consumers.get).toHaveBeenCalledTimes(2);
     expect(handles).toHaveLength(2);
@@ -360,10 +353,6 @@ describe("JetStream consumers", () => {
 });
 
 describe("Core consumers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("starts a subscription for each registration", () => {
     const { nc } = createMockNc();
 
@@ -421,7 +410,6 @@ describe("Core consumers", () => {
       "ce-time": "2026-01-01T00:00:00Z",
     });
 
-    // Trigger the subscription callback
     await subscriptions[0].callback(null, msg);
 
     expect(received).toEqual([{ orderId: "123" }]);
@@ -456,7 +444,7 @@ describe("Core consumers", () => {
 
     await subscriptions[0].callback(null, msg);
 
-    expect(msg.respond).toHaveBeenCalledOnce();
+    expect(msg.respond).toHaveBeenCalledTimes(1);
     const respData = msg.respond.mock.calls[0][0];
     expect(JSON.parse(new TextDecoder().decode(respData))).toEqual({
       status: "found",
@@ -495,7 +483,7 @@ describe("Core consumers", () => {
 
     await subscriptions[0].callback(null, msg);
 
-    expect(msg.respond).toHaveBeenCalledOnce();
+    expect(msg.respond).toHaveBeenCalledTimes(1);
     const respData = msg.respond.mock.calls[0][0];
     expect(JSON.parse(new TextDecoder().decode(respData))).toEqual({
       error: "not found",
@@ -553,10 +541,10 @@ describe("Core consumers", () => {
   it("logs error on invalid JSON payload", async () => {
     const { nc, subscriptions } = createMockNc();
     const logger = {
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-      debug: vi.fn(),
+      info: mock(() => {}),
+      warn: mock(() => {}),
+      error: mock(() => {}),
+      debug: mock(() => {}),
     };
 
     const registrations: CoreConsumerRegistration<unknown, unknown>[] = [
@@ -571,18 +559,17 @@ describe("Core consumers", () => {
 
     startCoreConsumers(nc as never, "test-service", registrations, logger);
 
-    // Send invalid JSON
     const msg = {
       subject: "svc.request.test",
       data: new TextEncoder().encode("not json{"),
       headers: {
         get: () => "",
         has: () => false,
-        keys: () => [],
+        keys: () => [] as string[],
         [Symbol.iterator]: function* () {},
       },
       reply: "",
-      respond: vi.fn(),
+      respond: mock(() => {}),
     };
 
     await subscriptions[0].callback(null, msg);
@@ -612,9 +599,8 @@ describe("Core consumers", () => {
       silentLogger,
     );
 
-    // Should not throw
     handles[0].stop();
-    const sub = (nc.subscribe as ReturnType<typeof vi.fn>).mock.results[0].value;
-    expect(sub.unsubscribe).toHaveBeenCalledOnce();
+    const sub = (nc.subscribe as ReturnType<typeof mock>).mock.results[0].value;
+    expect(sub.unsubscribe).toHaveBeenCalledTimes(1);
   });
 });

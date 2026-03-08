@@ -1,26 +1,34 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, mock, beforeEach } from "bun:test";
 import { startJSConsumers, startCoreConsumers } from "../src/consumer.js";
 import { Publisher } from "../src/publisher.js";
 import type { MetricsRecorder } from "@sparetimecoders/messaging";
 import type { JSConsumerRegistration, CoreConsumerRegistration } from "../src/consumer.js";
 
-function createMockMetrics(): MetricsRecorder & { [K in keyof MetricsRecorder]: ReturnType<typeof vi.fn> } {
+async function waitFor(fn: () => void, timeout = 1000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try { fn(); return; } catch { await new Promise(r => setTimeout(r, 10)); }
+  }
+  fn();
+}
+
+function createMockMetrics(): MetricsRecorder & { [K in keyof MetricsRecorder]: ReturnType<typeof mock> } {
   return {
-    eventReceived: vi.fn(),
-    eventWithoutHandler: vi.fn(),
-    eventNotParsable: vi.fn(),
-    eventAck: vi.fn(),
-    eventNack: vi.fn(),
-    publishSucceed: vi.fn(),
-    publishFailed: vi.fn(),
+    eventReceived: mock(() => {}),
+    eventWithoutHandler: mock(() => {}),
+    eventNotParsable: mock(() => {}),
+    eventAck: mock(() => {}),
+    eventNack: mock(() => {}),
+    publishSucceed: mock(() => {}),
+    publishFailed: mock(() => {}),
   };
 }
 
 const silentLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
+  info: mock(() => {}),
+  warn: mock(() => {}),
+  error: mock(() => {}),
+  debug: mock(() => {}),
 };
 
 function createMockNc() {
@@ -31,9 +39,9 @@ function createMockNc() {
 
   return {
     nc: {
-      subscribe: vi.fn((subject: string, opts: { callback: (err: null, msg: unknown) => void }) => {
+      subscribe: mock((subject: string, opts: { callback: (err: null, msg: unknown) => void }) => {
         subscriptions.push({ subject, callback: opts.callback });
-        return { unsubscribe: vi.fn() };
+        return { unsubscribe: mock(() => {}) };
       }),
     },
     subscriptions,
@@ -67,7 +75,7 @@ function createMockMsg(data: unknown, headers?: Record<string, string>) {
     data: new TextEncoder().encode(JSON.stringify(data)),
     headers: headerObj,
     reply: "",
-    respond: vi.fn(),
+    respond: mock(() => {}),
   };
 }
 
@@ -84,7 +92,6 @@ describe("NATS JetStream Consumer Metrics", () => {
 
   beforeEach(() => {
     metrics = createMockMetrics();
-    vi.clearAllMocks();
   });
 
   it("calls eventReceived and eventAck on successful handler", async () => {
@@ -92,7 +99,7 @@ describe("NATS JetStream Consumer Metrics", () => {
     const acked: boolean[] = [];
 
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Created",
@@ -121,15 +128,15 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -148,7 +155,7 @@ describe("NATS JetStream Consumer Metrics", () => {
       metrics,
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(received).toHaveLength(1);
     });
 
@@ -162,7 +169,7 @@ describe("NATS JetStream Consumer Metrics", () => {
     const nacked: boolean[] = [];
 
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Created",
@@ -191,15 +198,15 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -218,7 +225,7 @@ describe("NATS JetStream Consumer Metrics", () => {
       metrics,
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(nacked).toHaveLength(1);
     });
 
@@ -232,7 +239,7 @@ describe("NATS JetStream Consumer Metrics", () => {
     const nacked: boolean[] = [];
 
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Unknown",
@@ -255,15 +262,15 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -282,7 +289,7 @@ describe("NATS JetStream Consumer Metrics", () => {
       metrics,
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(nacked).toHaveLength(1);
     });
 
@@ -294,7 +301,7 @@ describe("NATS JetStream Consumer Metrics", () => {
     const termed: boolean[] = [];
 
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Created",
@@ -317,15 +324,15 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -344,7 +351,7 @@ describe("NATS JetStream Consumer Metrics", () => {
       metrics,
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(termed).toHaveLength(1);
     });
 
@@ -357,7 +364,7 @@ describe("NATS JetStream Consumer Metrics", () => {
     const mapper = (key: string) => key.replace(/\.\d+/, ".ID");
 
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.123",
@@ -386,15 +393,15 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -413,7 +420,7 @@ describe("NATS JetStream Consumer Metrics", () => {
       metrics, mapper,
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(acked).toHaveLength(1);
     });
 
@@ -429,7 +436,6 @@ describe("NATS Core Consumer Metrics", () => {
 
   beforeEach(() => {
     metrics = createMockMetrics();
-    vi.clearAllMocks();
   });
 
   it("calls eventReceived and eventAck on successful handler", async () => {
@@ -510,11 +516,11 @@ describe("NATS Core Consumer Metrics", () => {
       headers: {
         get: () => "",
         has: () => false,
-        keys: () => [],
+        keys: () => [] as string[],
         [Symbol.iterator]: function* () {},
       },
       reply: "",
-      respond: vi.fn(),
+      respond: mock(() => {}),
     };
 
     await subscriptions[0].callback(null, msg);
@@ -557,7 +563,6 @@ describe("NATS Publisher Metrics", () => {
 
   beforeEach(() => {
     metrics = createMockMetrics();
-    vi.clearAllMocks();
   });
 
   it("calls publishSucceed on successful publish", async () => {
@@ -568,7 +573,7 @@ describe("NATS Publisher Metrics", () => {
     });
 
     const mockJs = {
-      publish: vi.fn(async () => ({ stream: "events", seq: 1 })),
+      publish: mock(async () => ({ stream: "events", seq: 1 })),
     };
 
     publisher.wireJetStream(mockJs as never);
@@ -588,7 +593,7 @@ describe("NATS Publisher Metrics", () => {
     });
 
     const mockJs = {
-      publish: vi.fn(async () => { throw new Error("publish failed"); }),
+      publish: mock(async () => { throw new Error("publish failed"); }),
     };
 
     publisher.wireJetStream(mockJs as never);
@@ -611,7 +616,7 @@ describe("NATS Publisher Metrics", () => {
     });
 
     const mockJs = {
-      publish: vi.fn(async () => ({ stream: "events", seq: 1 })),
+      publish: mock(async () => ({ stream: "events", seq: 1 })),
     };
 
     publisher.wireJetStream(mockJs as never);
@@ -632,7 +637,7 @@ describe("NATS Publisher Metrics", () => {
     });
 
     const mockJs = {
-      publish: vi.fn(async () => ({ stream: "events", seq: 1 })),
+      publish: mock(async () => ({ stream: "events", seq: 1 })),
     };
 
     publisher.wireJetStream(mockJs as never);
