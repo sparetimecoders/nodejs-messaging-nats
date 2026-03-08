@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "bun:test";
 import { Connection } from "../src/connection.js";
 import type { Endpoint } from "@sparetimecoders/messaging";
 
@@ -10,7 +10,6 @@ const fixturesPath = resolve(
 );
 const fixtures = JSON.parse(readFileSync(fixturesPath, "utf-8"));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const noopHandler = async () => {};
 
 interface Setup {
@@ -79,7 +78,6 @@ function assertEndpoint(
   }
   if (expected.ephemeral) {
     expect(actual.ephemeral).toBe(true);
-    // NATS ephemeral consumers have no queue name.
     expect(actual.queueName).toBeUndefined();
   } else if (expected.queueName) {
     expect(actual.queueName).toBe(expected.queueName);

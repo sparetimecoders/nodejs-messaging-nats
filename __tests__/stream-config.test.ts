@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, mock, beforeEach } from "bun:test";
 import { startJSConsumers } from "../src/consumer.js";
 import type { JSConsumerRegistration } from "../src/consumer.js";
 import type { StreamConfigResolver } from "../src/connection.js";
@@ -6,38 +6,38 @@ import { DefaultStreamConfig } from "../src/connection.js";
 import { AckPolicy } from "nats";
 
 const silentLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
+  info: mock(() => {}),
+  warn: mock(() => {}),
+  error: mock(() => {}),
+  debug: mock(() => {}),
 };
 
 function createMockJsAndJsm() {
   const mockMessages = {
-    stop: vi.fn(),
+    stop: mock(() => {}),
     [Symbol.asyncIterator]: async function* () {
       // no messages in test
     },
   };
 
   const mockConsumer = {
-    consume: vi.fn().mockResolvedValue(mockMessages),
+    consume: mock(() => Promise.resolve(mockMessages)),
   };
 
   const js = {
     consumers: {
-      get: vi.fn().mockResolvedValue(mockConsumer),
+      get: mock(() => Promise.resolve(mockConsumer)),
     },
   };
 
   const jsm = {
     streams: {
-      add: vi.fn().mockResolvedValue({}),
-      update: vi.fn().mockResolvedValue({}),
+      add: mock(() => Promise.resolve({})),
+      update: mock(() => Promise.resolve({})),
     },
     consumers: {
-      add: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue(true),
+      add: mock(() => Promise.resolve({})),
+      delete: mock(() => Promise.resolve(true)),
     },
   };
 
@@ -59,10 +59,6 @@ describe("DefaultStreamConfig", () => {
 });
 
 describe("Stream config in startJSConsumers", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("passes stream config to jsm.streams.add when resolver is provided", async () => {
     const { js, jsm } = createMockJsAndJsm();
 
@@ -130,7 +126,7 @@ describe("Stream config in startJSConsumers", () => {
 
   it("passes stream config to jsm.streams.update on fallback", async () => {
     const { js, jsm } = createMockJsAndJsm();
-    jsm.streams.add.mockRejectedValueOnce(new Error("stream already exists"));
+    jsm.streams.add.mockImplementation(() => Promise.reject(new Error("stream already exists")));
 
     const resolver: StreamConfigResolver = () => ({
       max_age: 86_400_000_000_000,

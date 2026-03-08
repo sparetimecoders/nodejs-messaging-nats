@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it, mock } from "bun:test";
 import { Publisher } from "../src/publisher.js";
 import {
   CESpecVersion,
@@ -22,9 +22,8 @@ describe("Publisher", () => {
       let capturedData: Uint8Array = new Uint8Array();
       let capturedHeaders: Map<string, string[]> | null = null;
 
-      // Mock JetStream client
       const mockJs = {
-        publish: vi.fn(async (subject: string, data: Uint8Array, opts: { headers: unknown }) => {
+        publish: mock(async (subject: string, data: Uint8Array, opts: { headers: unknown }) => {
           capturedSubject = subject;
           capturedData = data;
           capturedHeaders = opts.headers as Map<string, string[]>;
@@ -41,9 +40,8 @@ describe("Publisher", () => {
       const body = JSON.parse(new TextDecoder().decode(capturedData));
       expect(body).toEqual({ orderId: "123" });
 
-      expect(mockJs.publish).toHaveBeenCalledOnce();
+      expect(mockJs.publish).toHaveBeenCalledTimes(1);
 
-      // Verify headers were passed (the nats headers object)
       const hdrs = capturedHeaders as unknown as { get(k: string): string; has(k: string): boolean };
       expect(hdrs.get(CESpecVersion)).toBe(CESpecVersionValue);
       expect(hdrs.get(CEType)).toBe("order.created");
@@ -62,7 +60,7 @@ describe("Publisher", () => {
 
       let capturedHeaders: unknown = null;
       const mockJs = {
-        publish: vi.fn(async (_subject: string, _data: Uint8Array, opts: { headers: unknown }) => {
+        publish: mock(async (_subject: string, _data: Uint8Array, opts: { headers: unknown }) => {
           capturedHeaders = opts.headers;
           return { stream: "events", seq: 1 };
         }),
@@ -73,7 +71,6 @@ describe("Publisher", () => {
 
       const hdrs = capturedHeaders as { get(k: string): string };
       const timeValue = hdrs.get(CETime);
-      // Should be a valid ISO 8601 / RFC 3339 timestamp
       expect(new Date(timeValue).toISOString()).toBeTruthy();
     });
 
@@ -85,7 +82,7 @@ describe("Publisher", () => {
 
       let capturedHeaders: unknown = null;
       const mockJs = {
-        publish: vi.fn(async (_subject: string, _data: Uint8Array, opts: { headers: unknown }) => {
+        publish: mock(async (_subject: string, _data: Uint8Array, opts: { headers: unknown }) => {
           capturedHeaders = opts.headers;
           return { stream: "events", seq: 1 };
         }),
@@ -96,7 +93,6 @@ describe("Publisher", () => {
 
       const hdrs = capturedHeaders as { get(k: string): string };
       const id = hdrs.get(CEID);
-      // UUID v4 format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
       expect(id).toMatch(
         /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );
@@ -111,7 +107,7 @@ describe("Publisher", () => {
       });
 
       const mockNc = {
-        request: vi.fn(async () => {
+        request: mock(async () => {
           return { data: new Uint8Array() };
         }),
       };
@@ -120,7 +116,7 @@ describe("Publisher", () => {
 
       await publisher.publish("get-order", { orderId: "456" });
 
-      expect(mockNc.request).toHaveBeenCalledOnce();
+      expect(mockNc.request).toHaveBeenCalledTimes(1);
       const args = mockNc.request.mock.calls[0] as unknown as [string, Uint8Array, { timeout: number; headers: unknown }];
       expect(args[0]).toBe("order-service.get-order");
       expect(JSON.parse(new TextDecoder().decode(args[1]))).toEqual({ orderId: "456" });
@@ -134,7 +130,7 @@ describe("Publisher", () => {
       });
 
       const mockNc = {
-        request: vi.fn(async () => {
+        request: mock(async () => {
           return { data: new Uint8Array() };
         }),
       };
@@ -157,7 +153,7 @@ describe("Publisher", () => {
 
       let capturedSubject = "";
       const mockJs = {
-        publish: vi.fn(async (subject: string) => {
+        publish: mock(async (subject: string) => {
           capturedSubject = subject;
           return { stream: "custom-stream", seq: 1 };
         }),

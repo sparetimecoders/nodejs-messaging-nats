@@ -1,42 +1,42 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, mock, beforeEach } from "bun:test";
 import { startJSConsumers } from "../src/consumer.js";
 import type { JSConsumerRegistration } from "../src/consumer.js";
 import type { ConsumerDefaults } from "../src/connection.js";
 import { AckPolicy } from "nats";
 
 const silentLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
+  info: mock(() => {}),
+  warn: mock(() => {}),
+  error: mock(() => {}),
+  debug: mock(() => {}),
 };
 
 function createMockJsAndJsm() {
   const mockMessages = {
-    stop: vi.fn(),
+    stop: mock(() => {}),
     [Symbol.asyncIterator]: async function* () {
       // no messages in test
     },
   };
 
   const mockConsumer = {
-    consume: vi.fn().mockResolvedValue(mockMessages),
+    consume: mock(() => Promise.resolve(mockMessages)),
   };
 
   const js = {
     consumers: {
-      get: vi.fn().mockResolvedValue(mockConsumer),
+      get: mock(() => Promise.resolve(mockConsumer)),
     },
   };
 
   const jsm = {
     streams: {
-      add: vi.fn().mockResolvedValue({}),
-      update: vi.fn().mockResolvedValue({}),
+      add: mock(() => Promise.resolve({})),
+      update: mock(() => Promise.resolve({})),
     },
     consumers: {
-      add: vi.fn().mockResolvedValue({}),
-      delete: vi.fn().mockResolvedValue(true),
+      add: mock(() => Promise.resolve({})),
+      delete: mock(() => Promise.resolve(true)),
     },
   };
 
@@ -44,10 +44,6 @@ function createMockJsAndJsm() {
 }
 
 describe("Consumer defaults (connection-level)", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("applies maxDeliver from consumerDefaults", async () => {
     const { js, jsm } = createMockJsAndJsm();
 
@@ -252,10 +248,6 @@ describe("Consumer defaults (connection-level)", () => {
 });
 
 describe("Per-consumer options override defaults", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("per-consumer maxDeliver overrides connection default", async () => {
     const { js, jsm } = createMockJsAndJsm();
 
@@ -378,7 +370,6 @@ describe("Per-consumer options override defaults", () => {
         routingKey: "Order.Updated",
         handler: async () => {},
         durable: "test-svc",
-        // This second registration's maxDeliver is ignored (first wins)
         maxDeliver: 3,
       },
     ];

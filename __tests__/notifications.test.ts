@@ -1,13 +1,21 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, mock, beforeEach } from "bun:test";
 import { startJSConsumers, startCoreConsumers } from "../src/consumer.js";
 import type { JSConsumerRegistration, CoreConsumerRegistration } from "../src/consumer.js";
 import type { Notification, ErrorNotification } from "@sparetimecoders/messaging";
 
+async function waitFor(fn: () => void, timeout = 1000): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    try { fn(); return; } catch { await new Promise(r => setTimeout(r, 10)); }
+  }
+  fn();
+}
+
 const silentLogger = {
-  info: vi.fn(),
-  warn: vi.fn(),
-  error: vi.fn(),
-  debug: vi.fn(),
+  info: mock(() => {}),
+  warn: mock(() => {}),
+  error: mock(() => {}),
+  debug: mock(() => {}),
 };
 
 function createCEHeaders() {
@@ -28,39 +36,35 @@ function createCEHeaders() {
 }
 
 describe("JetStream notifications", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("emits notification on successful handler", async () => {
     const notifications: Notification[] = [];
-    const onNotification = vi.fn((n: Notification) => notifications.push(n));
+    const onNotification = mock((n: Notification) => { notifications.push(n); });
 
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Created",
           data: new TextEncoder().encode(JSON.stringify({ orderId: "999" })),
           headers: createCEHeaders(),
-          ack: vi.fn(),
-          nak: vi.fn(),
-          term: vi.fn(),
+          ack: mock(() => {}),
+          nak: mock(() => {}),
+          term: mock(() => {}),
         };
       },
     };
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -85,8 +89,8 @@ describe("JetStream notifications", () => {
       onNotification,
     );
 
-    await vi.waitFor(() => {
-      expect(onNotification).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(onNotification).toHaveBeenCalledTimes(1);
     });
 
     const n = notifications[0];
@@ -98,35 +102,35 @@ describe("JetStream notifications", () => {
 
   it("emits error notification on handler failure", async () => {
     const errors: ErrorNotification[] = [];
-    const onError = vi.fn((n: ErrorNotification) => errors.push(n));
+    const onError = mock((n: ErrorNotification) => { errors.push(n); });
     const handlerError = new Error("boom");
 
-    const nakFn = vi.fn();
+    const nakFn = mock(() => {});
     const mockMessages = {
-      stop: vi.fn(),
+      stop: mock(() => {}),
       [Symbol.asyncIterator]: async function* () {
         yield {
           subject: "events.Order.Created",
           data: new TextEncoder().encode(JSON.stringify({ orderId: "999" })),
           headers: createCEHeaders(),
-          ack: vi.fn(),
+          ack: mock(() => {}),
           nak: nakFn,
-          term: vi.fn(),
+          term: mock(() => {}),
         };
       },
     };
 
     const js = {
       consumers: {
-        get: vi.fn().mockResolvedValue({
-          consume: vi.fn().mockResolvedValue(mockMessages),
-        }),
+        get: mock(() => Promise.resolve({
+          consume: mock(() => Promise.resolve(mockMessages)),
+        })),
       },
     };
 
     const jsm = {
-      streams: { add: vi.fn().mockResolvedValue({}), update: vi.fn().mockResolvedValue({}) },
-      consumers: { add: vi.fn().mockResolvedValue({}), delete: vi.fn().mockResolvedValue(true) },
+      streams: { add: mock(() => Promise.resolve({})), update: mock(() => Promise.resolve({})) },
+      consumers: { add: mock(() => Promise.resolve({})), delete: mock(() => Promise.resolve(true)) },
     };
 
     const registrations: JSConsumerRegistration<unknown>[] = [
@@ -152,8 +156,8 @@ describe("JetStream notifications", () => {
       onError,
     );
 
-    await vi.waitFor(() => {
-      expect(onError).toHaveBeenCalledOnce();
+    await waitFor(() => {
+      expect(onError).toHaveBeenCalledTimes(1);
     });
 
     const n = errors[0];
@@ -166,10 +170,6 @@ describe("JetStream notifications", () => {
 });
 
 describe("Core NATS notifications", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   function createMockNc() {
     const subscriptions: Array<{
       subject: string;
@@ -178,9 +178,9 @@ describe("Core NATS notifications", () => {
 
     return {
       nc: {
-        subscribe: vi.fn((subject: string, opts: { callback: (err: null, msg: unknown) => void }) => {
+        subscribe: mock((subject: string, opts: { callback: (err: null, msg: unknown) => void }) => {
           subscriptions.push({ subject, callback: opts.callback });
-          return { unsubscribe: vi.fn() };
+          return { unsubscribe: mock(() => {}) };
         }),
       },
       subscriptions,
@@ -205,14 +205,14 @@ describe("Core NATS notifications", () => {
         [Symbol.iterator]() { return hdrs.entries(); },
       },
       reply: "",
-      respond: vi.fn(),
+      respond: mock(() => {}),
     };
   }
 
   it("emits notification on successful Core handler", async () => {
     const { nc, subscriptions } = createMockNc();
     const notifications: Notification[] = [];
-    const onNotification = vi.fn((n: Notification) => notifications.push(n));
+    const onNotification = mock((n: Notification) => { notifications.push(n); });
 
     const registrations: CoreConsumerRegistration<unknown, unknown>[] = [
       {
@@ -236,7 +236,7 @@ describe("Core NATS notifications", () => {
     const msg = createMockMsg({ orderId: "123" });
     await subscriptions[0].callback(null, msg);
 
-    expect(onNotification).toHaveBeenCalledOnce();
+    expect(onNotification).toHaveBeenCalledTimes(1);
     const n = notifications[0];
     expect(n.source).toBe("CONSUMER");
     expect(n.deliveryInfo.key).toBe("get-order");
@@ -246,7 +246,7 @@ describe("Core NATS notifications", () => {
   it("emits error notification on Core handler failure", async () => {
     const { nc, subscriptions } = createMockNc();
     const errors: ErrorNotification[] = [];
-    const onError = vi.fn((n: ErrorNotification) => errors.push(n));
+    const onError = mock((n: ErrorNotification) => { errors.push(n); });
     const handlerError = new Error("core boom");
 
     const registrations: CoreConsumerRegistration<unknown, unknown>[] = [
@@ -272,7 +272,7 @@ describe("Core NATS notifications", () => {
     const msg = createMockMsg({ orderId: "123" });
     await subscriptions[0].callback(null, msg);
 
-    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledTimes(1);
     const n = errors[0];
     expect(n.source).toBe("CONSUMER");
     expect(n.error).toBe(handlerError);
