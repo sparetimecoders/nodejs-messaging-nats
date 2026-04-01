@@ -151,8 +151,7 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     await startJSConsumers(
       js as never, jsm as never, "test-svc", registrations, silentLogger,
-      undefined, undefined, undefined, undefined, undefined,
-      metrics,
+      { metrics },
     );
 
     await waitFor(() => {
@@ -221,8 +220,7 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     await startJSConsumers(
       js as never, jsm as never, "test-svc", registrations, silentLogger,
-      undefined, undefined, undefined, undefined, undefined,
-      metrics,
+      { metrics },
     );
 
     await waitFor(() => {
@@ -285,8 +283,7 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     await startJSConsumers(
       js as never, jsm as never, "test-svc", registrations, silentLogger,
-      undefined, undefined, undefined, undefined, undefined,
-      metrics,
+      { metrics },
     );
 
     await waitFor(() => {
@@ -347,8 +344,7 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     await startJSConsumers(
       js as never, jsm as never, "test-svc", registrations, silentLogger,
-      undefined, undefined, undefined, undefined, undefined,
-      metrics,
+      { metrics },
     );
 
     await waitFor(() => {
@@ -416,8 +412,7 @@ describe("NATS JetStream Consumer Metrics", () => {
 
     await startJSConsumers(
       js as never, jsm as never, "test-svc", registrations, silentLogger,
-      undefined, undefined, undefined, undefined, undefined,
-      metrics, mapper,
+      { metrics, routingKeyMapper: mapper },
     );
 
     await waitFor(() => {
@@ -453,7 +448,7 @@ describe("NATS Core Consumer Metrics", () => {
 
     startCoreConsumers(
       nc as never, "test-service", registrations, silentLogger,
-      undefined, undefined, undefined, metrics,
+      { metrics },
     );
 
     const msg = createMockMsg({ orderId: "123" }, ceHeaders);
@@ -480,7 +475,7 @@ describe("NATS Core Consumer Metrics", () => {
 
     startCoreConsumers(
       nc as never, "test-service", registrations, silentLogger,
-      undefined, undefined, undefined, metrics,
+      { metrics },
     );
 
     const msg = createMockMsg({ orderId: "123" }, ceHeaders);
@@ -507,7 +502,7 @@ describe("NATS Core Consumer Metrics", () => {
 
     startCoreConsumers(
       nc as never, "test-service", registrations, silentLogger,
-      undefined, undefined, undefined, metrics,
+      { metrics },
     );
 
     const msg = {
@@ -545,7 +540,7 @@ describe("NATS Core Consumer Metrics", () => {
 
     startCoreConsumers(
       nc as never, "test-service", registrations, silentLogger,
-      undefined, undefined, undefined, metrics, mapper,
+      { metrics, routingKeyMapper: mapper },
     );
 
     const msg = createMockMsg({ orderId: "123" }, ceHeaders);

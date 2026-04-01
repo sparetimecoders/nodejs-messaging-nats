@@ -83,10 +83,7 @@ describe("JetStream notifications", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      undefined,
-      onNotification,
+      { onNotification },
     );
 
     await waitFor(() => {
@@ -149,11 +146,7 @@ describe("JetStream notifications", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      onError,
+      { onError },
     );
 
     await waitFor(() => {
@@ -229,8 +222,7 @@ describe("Core NATS notifications", () => {
       "test-service",
       registrations,
       silentLogger,
-      undefined,
-      onNotification,
+      { onNotification },
     );
 
     const msg = createMockMsg({ orderId: "123" });
@@ -264,9 +256,7 @@ describe("Core NATS notifications", () => {
       "test-service",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      onError,
+      { onError },
     );
 
     const msg = createMockMsg({ orderId: "123" });

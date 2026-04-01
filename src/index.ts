@@ -21,4 +21,5 @@ export { Connection, DefaultStreamConfig } from "./connection.js";
 export type { ConnectionOptions, StreamConfig, StreamConfigResolver, ConsumerDefaults, ConsumerOptions } from "./connection.js";
 export { Publisher } from "./publisher.js";
 export type { PublisherOptions } from "./publisher.js";
+export type { JSConsumerOptions, CoreConsumerOptions } from "./consumer.js";
 export { injectToHeaders, extractToContext } from "./tracing.js";

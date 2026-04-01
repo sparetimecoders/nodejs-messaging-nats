@@ -19,6 +19,7 @@ import {
 import {
   connect,
   Events,
+  NatsError,
   type ConnectionOptions as NatsConnectionOptions,
   type NatsConnection,
   type JetStreamClient,
@@ -445,8 +446,14 @@ export class Connection {
             subjects: [`${stream}.>`],
             ...streamCfg,
           });
-        } catch {
-          // Already exists with correct config
+        } catch (updateErr) {
+          // Suppress 10058 (stream name already in use) / 10059 (consumer name exists)
+          const apiCode = (updateErr instanceof NatsError)
+            ? updateErr.api_error?.err_code
+            : undefined;
+          if (apiCode !== 10058 && apiCode !== 10059) {
+            throw updateErr;
+          }
         }
       }
       publisher.wireJetStream(this.js);
@@ -465,13 +472,15 @@ export class Connection {
         this.serviceName,
         this.jsRegistrations,
         this.logger,
-        this.propagator,
-        (stream) => this.resolveStreamConfig(stream),
-        this.consumerDefaults,
-        this.onNotification,
-        this.onError,
-        this.metrics,
-        this.routingKeyMapper,
+        {
+          propagator: this.propagator,
+          resolveStreamConfig: (stream) => this.resolveStreamConfig(stream),
+          consumerDefaults: this.consumerDefaults,
+          onNotification: this.onNotification,
+          onError: this.onError,
+          metrics: this.metrics,
+          routingKeyMapper: this.routingKeyMapper,
+        },
       );
       this.consumerHandles.push(...handles);
     }
@@ -483,11 +492,13 @@ export class Connection {
         this.serviceName,
         this.coreRegistrations,
         this.logger,
-        this.propagator,
-        this.onNotification,
-        this.onError,
-        this.metrics,
-        this.routingKeyMapper,
+        {
+          propagator: this.propagator,
+          onNotification: this.onNotification,
+          onError: this.onError,
+          metrics: this.metrics,
+          routingKeyMapper: this.routingKeyMapper,
+        },
       );
       this.consumerHandles.push(...handles);
     }
