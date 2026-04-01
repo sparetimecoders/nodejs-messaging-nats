@@ -2,6 +2,7 @@ import { describe, expect, it, mock, beforeEach } from "bun:test";
 import { startJSConsumers } from "../src/consumer.js";
 import type { JSConsumerRegistration } from "../src/consumer.js";
 import type { ConsumerDefaults } from "../src/connection.js";
+import type { JSConsumerOptions } from "../src/consumer.js";
 import { AckPolicy } from "nats";
 
 const silentLogger = {
@@ -65,9 +66,7 @@ describe("Consumer defaults (connection-level)", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -101,9 +100,7 @@ describe("Consumer defaults (connection-level)", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -138,9 +135,7 @@ describe("Consumer defaults (connection-level)", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -201,9 +196,7 @@ describe("Consumer defaults (connection-level)", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -234,9 +227,7 @@ describe("Consumer defaults (connection-level)", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -270,9 +261,7 @@ describe("Per-consumer options override defaults", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -305,9 +294,7 @@ describe("Per-consumer options override defaults", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {
@@ -380,9 +367,7 @@ describe("Per-consumer options override defaults", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      undefined,
-      defaults,
+      { consumerDefaults: defaults },
     );
 
     expect(jsm.consumers.add).toHaveBeenCalledWith("events", {

@@ -84,8 +84,7 @@ describe("Stream config in startJSConsumers", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      resolver,
+      { resolveStreamConfig: resolver },
     );
 
     expect(jsm.streams.add).toHaveBeenCalledWith({
@@ -149,8 +148,7 @@ describe("Stream config in startJSConsumers", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      resolver,
+      { resolveStreamConfig: resolver },
     );
 
     expect(jsm.streams.update).toHaveBeenCalledWith("events", {
@@ -195,8 +193,7 @@ describe("Stream config in startJSConsumers", () => {
       "svc",
       registrations,
       silentLogger,
-      undefined,
-      resolver,
+      { resolveStreamConfig: resolver },
     );
 
     expect(resolvedStreams).toEqual(["events", "custom"]);
@@ -235,8 +232,7 @@ describe("Stream config in startJSConsumers", () => {
       "test-svc",
       registrations,
       silentLogger,
-      undefined,
-      resolver,
+      { resolveStreamConfig: resolver },
     );
 
     expect(jsm.streams.add).toHaveBeenCalledWith({

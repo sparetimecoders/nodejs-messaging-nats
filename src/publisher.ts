@@ -21,6 +21,7 @@ import { injectToHeaders } from "./tracing.js";
 import type { TextMapPropagator } from "@opentelemetry/api";
 
 const contentType = "application/json";
+const textEncoder = new TextEncoder();
 
 type PublishFn = (subject: string, data: Uint8Array, headers: MsgHdrs) => Promise<void>;
 
@@ -100,7 +101,7 @@ export class Publisher {
     }
 
     const subject = this.subjectFn(this.stream, routingKey);
-    const data = new TextEncoder().encode(JSON.stringify(msg));
+    const data = textEncoder.encode(JSON.stringify(msg));
 
     const hdrs = natsHeaders();
 

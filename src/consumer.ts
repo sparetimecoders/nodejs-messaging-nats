@@ -2,7 +2,7 @@
 // Copyright (c) 2026 sparetimecoders
 
 import type { JetStreamClient, NatsConnection, JetStreamManager, ConsumerMessages } from "nats";
-import { AckPolicy } from "nats";
+import { AckPolicy, NatsError } from "nats";
 import type {
   ConsumableEvent,
   EventHandler,
@@ -25,6 +25,9 @@ import {
 import { extractToContext } from "./tracing.js";
 import type { TextMapPropagator } from "@opentelemetry/api";
 import type { StreamConfigResolver, ConsumerDefaults } from "./connection.js";
+
+const textDecoder = new TextDecoder();
+const textEncoder = new TextEncoder();
 
 type Logger = Pick<Console, "info" | "warn" | "error" | "debug">;
 
@@ -74,6 +77,26 @@ function consumerGroupKey(reg: JSConsumerRegistration<unknown>): string {
   return `${reg.stream}:${reg.durable ?? ""}`;
 }
 
+/** Options for starting JetStream consumers. */
+export interface JSConsumerOptions {
+  propagator?: TextMapPropagator;
+  resolveStreamConfig?: StreamConfigResolver;
+  consumerDefaults?: ConsumerDefaults;
+  onNotification?: NotificationHandler;
+  onError?: ErrorNotificationHandler;
+  metrics?: MetricsRecorder;
+  routingKeyMapper?: RoutingKeyMapper;
+}
+
+/** Options for starting Core NATS consumers. */
+export interface CoreConsumerOptions {
+  propagator?: TextMapPropagator;
+  onNotification?: NotificationHandler;
+  onError?: ErrorNotificationHandler;
+  metrics?: MetricsRecorder;
+  routingKeyMapper?: RoutingKeyMapper;
+}
+
 /**
  * Start all registered JetStream consumers.
  *
@@ -90,14 +113,18 @@ export async function startJSConsumers(
   serviceName: string,
   registrations: JSConsumerRegistration<unknown>[],
   logger: Logger,
-  propagator?: TextMapPropagator,
-  resolveStreamConfig?: StreamConfigResolver,
-  consumerDefaults?: ConsumerDefaults,
-  onNotification?: NotificationHandler,
-  onError?: ErrorNotificationHandler,
-  metrics?: MetricsRecorder,
-  routingKeyMapper?: RoutingKeyMapper,
+  options: JSConsumerOptions = {},
 ): Promise<ConsumerHandle[]> {
+  const {
+    propagator,
+    resolveStreamConfig,
+    consumerDefaults,
+    onNotification,
+    onError,
+    metrics,
+    routingKeyMapper,
+  } = options;
+
   const handles: ConsumerHandle[] = [];
 
   // Group registrations by stream+durable so we create one NATS consumer per group.
@@ -132,8 +159,13 @@ export async function startJSConsumers(
           subjects: [streamSubjects],
           ...streamCfg,
         });
-      } catch {
-        // Already exists with correct config
+      } catch (updateErr) {
+        const apiCode = (updateErr instanceof NatsError)
+          ? updateErr.api_error?.err_code
+          : undefined;
+        if (apiCode !== 10058 && apiCode !== 10059) {
+          throw updateErr;
+        }
       }
     }
 
@@ -159,6 +191,21 @@ export async function startJSConsumers(
       consumerCfg.filter_subjects = filterSubjects;
     }
 
+    // Validate: backOff length must not exceed maxDeliver
+    const effectiveMaxDeliver = first.maxDeliver ?? consumerDefaults?.maxDeliver;
+    const effectiveBackOff = first.backOff ?? consumerDefaults?.backOff;
+    if (
+      effectiveBackOff !== undefined &&
+      effectiveBackOff.length > 0 &&
+      effectiveMaxDeliver !== undefined &&
+      effectiveMaxDeliver > 0 &&
+      effectiveBackOff.length > effectiveMaxDeliver
+    ) {
+      throw new Error(
+        `backOff length (${effectiveBackOff.length}) exceeds maxDeliver (${effectiveMaxDeliver}) for consumer on stream "${stream}"`,
+      );
+    }
+
     // Apply MaxDeliver: per-consumer override > connection default.
     const maxDeliver = first.maxDeliver ?? consumerDefaults?.maxDeliver;
     if (maxDeliver !== undefined && maxDeliver > 0) {
@@ -176,12 +223,14 @@ export async function startJSConsumers(
     try {
       const ci = await jsm.consumers.add(stream, consumerCfg);
       consumerName = ci.name;
-    } catch {
+    } catch (err) {
       // Consumer exists with incompatible config — delete and recreate
       if (durable) {
         await jsm.consumers.delete(stream, durable);
         const ci = await jsm.consumers.add(stream, consumerCfg);
         consumerName = ci.name;
+      } else {
+        throw err;
       }
     }
 
@@ -242,7 +291,7 @@ export async function startJSConsumers(
 
         let payload: unknown;
         try {
-          payload = JSON.parse(new TextDecoder().decode(msg.data));
+          payload = JSON.parse(textDecoder.decode(msg.data));
         } catch {
           logger.error(`[gomessaging/nats] Failed to parse message on ${subject}`);
           metrics?.eventNotParsable(consumerName, mappedKey);
@@ -307,12 +356,16 @@ export function startCoreConsumers(
   serviceName: string,
   registrations: CoreConsumerRegistration<unknown, unknown>[],
   logger: Logger,
-  propagator?: TextMapPropagator,
-  onNotification?: NotificationHandler,
-  onError?: ErrorNotificationHandler,
-  metrics?: MetricsRecorder,
-  routingKeyMapper?: RoutingKeyMapper,
+  options: CoreConsumerOptions = {},
 ): ConsumerHandle[] {
+  const {
+    propagator,
+    onNotification,
+    onError,
+    metrics,
+    routingKeyMapper,
+  } = options;
+
   const handles: ConsumerHandle[] = [];
 
   for (const reg of registrations) {
@@ -341,7 +394,7 @@ export function startCoreConsumers(
 
         let payload: unknown;
         try {
-          payload = JSON.parse(new TextDecoder().decode(msg.data));
+          payload = JSON.parse(textDecoder.decode(msg.data));
         } catch {
           logger.error(`[gomessaging/nats] Failed to parse message on ${reg.subject}`);
           metrics?.eventNotParsable(serviceName, mappedKey);
@@ -360,7 +413,7 @@ export function startCoreConsumers(
           if (reg.requestReply) {
             const respHandler = reg.handler as RequestResponseEventHandler<unknown, unknown>;
             const result = await respHandler(event);
-            const respData = new TextEncoder().encode(JSON.stringify(result));
+            const respData = textEncoder.encode(JSON.stringify(result));
             msg.respond(respData);
           } else {
             await (reg.handler as EventHandler<unknown>)(event);
@@ -384,7 +437,7 @@ export function startCoreConsumers(
           });
           logger.error(`[gomessaging/nats] Handler failed on ${reg.subject}: ${errObj.message}`);
           if (reg.requestReply && msg.reply) {
-            const errResp = new TextEncoder().encode(JSON.stringify({ error: errObj.message }));
+            const errResp = textEncoder.encode(JSON.stringify({ error: errObj.message }));
             msg.respond(errResp);
           }
         }
