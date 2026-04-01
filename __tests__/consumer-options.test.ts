@@ -3,7 +3,7 @@ import { startJSConsumers } from "../src/consumer.js";
 import type { JSConsumerRegistration } from "../src/consumer.js";
 import type { ConsumerDefaults } from "../src/connection.js";
 import type { JSConsumerOptions } from "../src/consumer.js";
-import { AckPolicy } from "nats";
+import { AckPolicy, NatsError } from "nats";
 
 const silentLogger = {
   info: mock(() => {}),
@@ -376,5 +376,121 @@ describe("Per-consumer options override defaults", () => {
       durable_name: "test-svc",
       max_deliver: 8,
     });
+  });
+});
+
+describe("Stream error handling", () => {
+  it("rethrows non-NATS errors from stream update", async () => {
+    const { js } = createMockJsAndJsm();
+
+    // streams.add fails, then streams.update also fails with a non-NATS error
+    const jsm = {
+      streams: {
+        add: mock(() => Promise.reject(new Error("add failed"))),
+        update: mock(() => Promise.reject(new Error("network timeout"))),
+      },
+      consumers: {
+        add: mock(() => Promise.resolve({})),
+        delete: mock(() => Promise.resolve(true)),
+      },
+    };
+
+    const registrations: JSConsumerRegistration<unknown>[] = [
+      {
+        kind: "jetstream",
+        stream: "events",
+        routingKey: "Order.Created",
+        handler: async () => {},
+        durable: "test-svc",
+      },
+    ];
+
+    await expect(
+      startJSConsumers(js as never, jsm as never, "test-svc", registrations, silentLogger),
+    ).rejects.toThrow("network timeout");
+  });
+
+  it("suppresses NATS 10058 error (stream already exists)", async () => {
+    const { js } = createMockJsAndJsm();
+
+    const natsErr = new NatsError("stream exists", "10058", new Error("inner"));
+    (natsErr as any).api_error = { err_code: 10058 };
+    const jsm = {
+      streams: {
+        add: mock(() => Promise.reject(new Error("add failed"))),
+        update: mock(() => Promise.reject(natsErr)),
+      },
+      consumers: {
+        add: mock(() => Promise.resolve({ name: "test-svc" })),
+        delete: mock(() => Promise.resolve(true)),
+      },
+    };
+
+    const registrations: JSConsumerRegistration<unknown>[] = [
+      {
+        kind: "jetstream",
+        stream: "events",
+        routingKey: "Order.Created",
+        handler: async () => {},
+        durable: "test-svc",
+      },
+    ];
+
+    // Should not throw
+    await startJSConsumers(js as never, jsm as never, "test-svc", registrations, silentLogger);
+    expect(jsm.consumers.add).toHaveBeenCalled();
+  });
+});
+
+describe("backOff/maxDeliver validation", () => {
+  it("throws when backOff length exceeds maxDeliver", async () => {
+    const { js, jsm } = createMockJsAndJsm();
+
+    const registrations: JSConsumerRegistration<unknown>[] = [
+      {
+        kind: "jetstream",
+        stream: "events",
+        routingKey: "Order.Created",
+        handler: async () => {},
+        durable: "test-svc",
+        maxDeliver: 2,
+        backOff: [1000, 5000, 30000],
+      },
+    ];
+
+    await expect(
+      startJSConsumers(js as never, jsm as never, "test-svc", registrations, silentLogger),
+    ).rejects.toThrow("backOff length (3) exceeds maxDeliver (2)");
+  });
+});
+
+describe("Ephemeral consumer error handling", () => {
+  it("rethrows error when ephemeral consumer creation fails", async () => {
+    const { js } = createMockJsAndJsm();
+
+    const jsm = {
+      streams: {
+        add: mock(() => Promise.resolve({})),
+        update: mock(() => Promise.resolve({})),
+      },
+      consumers: {
+        add: mock(() => Promise.reject(new Error("consumer creation failed"))),
+        delete: mock(() => Promise.resolve(true)),
+      },
+    };
+
+    const registrations: JSConsumerRegistration<unknown>[] = [
+      {
+        kind: "jetstream",
+        stream: "events",
+        routingKey: "Order.Created",
+        handler: async () => {},
+        // no durable = ephemeral
+      },
+    ];
+
+    await expect(
+      startJSConsumers(js as never, jsm as never, "test-svc", registrations, silentLogger),
+    ).rejects.toThrow("consumer creation failed");
   });
 });
