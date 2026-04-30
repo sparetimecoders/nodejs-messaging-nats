@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       nats:
-        image: nats@sha256:c9abdce88a85ed5fcc8e9fc6b284d2601f5d1c1d0d58ddd67cfdc411768bfd7f # latest
+        image: nats@sha256:c6876497e2b72cfad58868914b4a688affced496f522f32c343150e135e2140d # latest
         ports:
           - "4222:4222"
     steps:
